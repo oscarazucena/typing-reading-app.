@@ -1,0 +1,14 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local Data
+data/stash.db
+
+# Gemini CLI directory
+.gemini/
