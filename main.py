@@ -1,7 +1,12 @@
 import customtkinter as ctk
 from tkinter import Text, END
 import time
+import os
+import json
 from src.stats_tracker import calculate_wpm, calculate_accuracy
+
+# --- Settings ---
+SETTINGS_FILE = "config/settings.json"
 
 # --- Main Application ---
 class TypingApp(ctk.CTk):
@@ -58,6 +63,7 @@ class TypingApp(ctk.CTk):
         # Bind events
         self.text_display.bind("<KeyPress>", self.on_key_press)
         
+        self.load_settings()
         self.load_text("The quick brown fox jumps over the lazy dog. Try typing this sentence to test your speed and accuracy.")
 
     def load_text(self, text):
@@ -96,6 +102,10 @@ class TypingApp(ctk.CTk):
         # Ignore non-printable keys (e.g., Shift, Ctrl)
         if len(event.char) != 1 or not event.char.isprintable():
             return
+
+        # If test is finished, do nothing
+        if self.current_index >= len(self.source_text):
+            return "break"
 
         if not self.test_in_progress:
             self.start_time = time.time()
@@ -137,14 +147,13 @@ class TypingApp(ctk.CTk):
     def toggle_theme(self):
         mode = "dark" if self.theme_switch.get() == 1 else "light"
         ctk.set_appearance_mode(mode)
-        
+        self._apply_theme_to_text_widget(mode)
+        self.save_settings({"theme": mode})
+
+    def _apply_theme_to_text_widget(self, mode):
         bg_color, fg_color = self._get_text_widget_colors(mode)
         self.text_display.config(bg=bg_color, fg=fg_color, insertbackground=fg_color)
         self.text_display.tag_configure("untyped", foreground=fg_color)
-        
-        # Re-apply correct/incorrect tags if needed to prevent color issues on theme change
-        # This part can be enhanced to re-color already typed text.
-        # For now, untyped text color is the main focus.
 
     def _get_text_widget_colors(self, mode):
         if mode == "dark":
@@ -152,7 +161,28 @@ class TypingApp(ctk.CTk):
         else:
             return ("#FFFFFF", "#1E1E1E")
 
+    def load_settings(self):
+        try:
+            with open(SETTINGS_FILE, "r") as f:
+                settings = json.load(f)
+                theme = settings.get("theme", "system")
+                ctk.set_appearance_mode(theme)
+                if theme == "dark":
+                    self.theme_switch.select()
+                else:
+                    self.theme_switch.deselect()
+                # Apply theme to text widget after loading
+                self._apply_theme_to_text_widget(theme)
+        except (FileNotFoundError, json.JSONDecodeError):
+            # If file doesn't exist or is invalid, create it with default settings
+            os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
+            self.save_settings({"theme": "system"})
+            self._apply_theme_to_text_widget("system")
+
+    def save_settings(self, settings):
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(settings, f, indent=4)
+
 if __name__ == "__main__":
-    ctk.set_appearance_mode("system")
     app = TypingApp()
     app.mainloop()

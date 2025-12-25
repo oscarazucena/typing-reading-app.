@@ -24,3 +24,4 @@ A local-first Python application for practicing typing using scraped novel conte
 - [x] **Task 5: Stats Tracker** - Log errors (Expected vs. Actual) and calculate WPM/Accuracy.
 - [x] **Task 6: Gemini Drill Generator** - Integration to send error logs to Gemini and receive "practice sentences."
 - [ ] **Task 7: Main GUI Application** - Create a `main.py` to integrate all modules into a functional graphical user interface using CustomTkinter.
+- [ ] **Task 8: Create Startup Scripts** - Add `run.bat` for Windows and `run.sh` for Linux/macOS.

@@ -28,7 +28,16 @@ Ensure you have Python 3.10+ installed.
    `pip install -r requirements.txt`
 
 ### Running the Application
-To start the GUI application:
+To start the GUI application, simply run the appropriate script for your operating system:
+
+- **On Windows:** Double-click the `run.bat` file, or run it from your terminal:
+  ```
+  .\run.bat
+  ```
+
+- **On macOS/Linux:** (Coming Soon)
+
+Alternatively, you can run the application manually after activating the virtual environment:
    `python main.py`
 
 ## For Developers
