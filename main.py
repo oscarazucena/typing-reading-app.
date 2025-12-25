@@ -25,6 +25,7 @@ class TypingApp(ctk.CTk):
         self.incorrect_chars = 0
         self.start_time = None
         self.test_in_progress = False
+        self.test_completed_correctly = False
 
         # --- Main Frame ---
         self.main_frame = ctk.CTkFrame(self)
@@ -57,10 +58,10 @@ class TypingApp(ctk.CTk):
         self.text_display.pack(fill="both", expand=True)
         self.text_display.focus()
 
-        # Define tags for highlighting
-        self.text_display.tag_configure("correct", foreground="green")
-        self.text_display.tag_configure("incorrect", foreground="red", underline=True)
-        self.text_display.tag_configure("untyped", foreground=self._get_text_widget_colors(ctk.get_appearance_mode())[1])
+        # Define tags for highlighting - colors will be set by theme
+        self.text_display.tag_configure("correct")
+        self.text_display.tag_configure("incorrect", underline=True)
+        self.text_display.tag_configure("untyped")
 
         # Bind events
         self.text_display.bind("<KeyPress>", self.on_key_press)
@@ -82,6 +83,7 @@ class TypingApp(ctk.CTk):
         self.incorrect_chars = 0
         self.start_time = None
         self.test_in_progress = False
+        self.test_completed_correctly = False
         
         self.wpm_label.configure(text="WPM: 0")
         self.accuracy_label.configure(text="Accuracy: 100%")
@@ -93,17 +95,20 @@ class TypingApp(ctk.CTk):
 
     def on_key_press(self, event):
         logging.debug(f"\n--- Key Press: '{event.char}' ---")
+
+        if self.test_completed_correctly:
+            logging.debug("Test is 100% correct. Input is locked.")
+            return "break"
+
         if event.keysym == "BackSpace":
             if self.current_index > 0:
-                # Determine if the test was finished and is now being edited
                 if self.current_index >= len(self.source_text):
-                    self.test_in_progress = True # Re-open the test for edits
+                    self.test_in_progress = True
                     logging.debug("Test was finished, reopening for correction.")
 
                 self.current_index -= 1
                 char_pos = f"1.{self.current_index}"
                 
-                # Check tags to see if the character was correct or incorrect
                 tags = self.text_display.tag_names(char_pos)
                 if "correct" in tags:
                     self.correct_chars -= 1
@@ -150,6 +155,9 @@ class TypingApp(ctk.CTk):
         if self.current_index >= len(self.source_text):
             logging.debug("--- TEST FINISHED ---")
             self.test_in_progress = False
+            if self.incorrect_chars == 0:
+                self.test_completed_correctly = True
+                logging.debug("Test completed with 100% accuracy. Locking input.")
             logging.debug(f"Final state: test_in_progress = {self.test_in_progress}")
 
         return "break"
@@ -181,7 +189,18 @@ class TypingApp(ctk.CTk):
     def _apply_theme_to_text_widget(self, mode):
         bg_color, fg_color = self._get_text_widget_colors(mode)
         self.text_display.config(bg=bg_color, fg=fg_color, insertbackground=fg_color)
-        self.text_display.tag_configure("untyped", foreground=fg_color)
+        self._update_highlight_colors(mode)
+
+    def _update_highlight_colors(self, mode):
+        if mode == "dark":
+            correct_fg = "#A5D6A7"  # Light Green
+            incorrect_fg = "#EF9A9A" # Light Red
+        else: # Light mode
+            correct_fg = "#388E3C"  # Dark Green
+            incorrect_fg = "#D32F2F" # Dark Red
+        
+        self.text_display.tag_configure("correct", foreground=correct_fg)
+        self.text_display.tag_configure("incorrect", foreground=incorrect_fg)
 
     def _get_text_widget_colors(self, mode):
         if mode == "dark":
@@ -194,18 +213,21 @@ class TypingApp(ctk.CTk):
             with open(SETTINGS_FILE, "r") as f:
                 settings = json.load(f)
                 theme = settings.get("theme", "system")
+                if theme not in ["light", "dark"]:
+                    theme = "system"
+                
                 ctk.set_appearance_mode(theme)
                 if theme == "dark":
                     self.theme_switch.select()
                 else:
                     self.theme_switch.deselect()
-                # Apply theme to text widget after loading
+                
                 self._apply_theme_to_text_widget(theme)
         except (FileNotFoundError, json.JSONDecodeError):
-            # If file doesn't exist or is invalid, create it with default settings
             os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
-            self.save_settings({"theme": "system"})
-            self._apply_theme_to_text_widget("system")
+            current_theme = ctk.get_appearance_mode().lower()
+            self.save_settings({"theme": current_theme})
+            self._apply_theme_to_text_widget(current_theme)
 
     def save_settings(self, settings):
         with open(SETTINGS_FILE, "w") as f:
