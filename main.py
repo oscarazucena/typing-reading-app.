@@ -66,6 +66,7 @@ class TypingApp(ctk.CTk):
         self.text_display.tag_configure("correct")
         self.text_display.tag_configure("incorrect", underline=True)
         self.text_display.tag_configure("untyped")
+        self.text_display.tag_configure("corrected") # New tag for corrected errors
 
         # Bind events
         self.text_display.bind("<KeyPress>", self.on_key_press)
@@ -97,6 +98,7 @@ class TypingApp(ctk.CTk):
         # Reset all tags to untyped
         self.text_display.tag_remove("correct", "1.0", END)
         self.text_display.tag_remove("incorrect", "1.0", END)
+        self.text_display.tag_remove("corrected", "1.0", END)
         self.text_display.tag_add("untyped", "1.0", END)
 
     def on_key_press(self, event):
@@ -108,24 +110,21 @@ class TypingApp(ctk.CTk):
 
         if event.keysym == "BackSpace":
             if self.current_index > 0:
-                if self.current_index >= len(self.source_text):
-                    self.test_in_progress = True
-                    logging.debug("Test was finished, reopening for correction.")
-
                 self.current_index -= 1
                 char_pos = f"1.{self.current_index}"
                 
                 tags = self.text_display.tag_names(char_pos)
                 if "correct" in tags:
                     self.correct_chars -= 1
-                    logging.debug("Correct character deleted.")
                 elif "incorrect" in tags:
                     self.incorrect_chars -= 1
-                    logging.debug("Incorrect character deleted.")
+                    # Mark the error as 'corrected' visually
+                    self.text_display.tag_add("corrected", char_pos, f"{char_pos}+1c")
+                    self.text_display.tag_remove("incorrect", char_pos, f"{char_pos}+1c")
                 
+                # Allow re-typing by removing existing tags
                 self.text_display.tag_remove("correct", char_pos, f"{char_pos}+1c")
-                self.text_display.tag_remove("incorrect", char_pos, f"{char_pos}+1c")
-                logging.debug(f"Backspace pressed. New index: {self.current_index}, Correct: {self.correct_chars}, Incorrect: {self.incorrect_chars}")
+                logging.debug(f"Backspace pressed. New index: {self.current_index}")
             return "break"
 
         if len(event.char) != 1 or not event.char.isprintable():
@@ -150,17 +149,21 @@ class TypingApp(ctk.CTk):
             if typed_char == expected_char:
                 self.correct_chars += 1
                 self.text_display.tag_add("correct", char_pos, f"{char_pos}+1c")
+                self.text_display.tag_remove("incorrect", char_pos, f"{char_pos}+1c")
             else:
-                self.incorrect_chars += 1
-                self.total_errors += 1
-                error_info = {
-                    "expected": expected_char,
-                    "actual": typed_char,
-                    "position": self.current_index
-                }
-                self.error_details.append(error_info)
-                logging.debug(f"Error logged: {error_info}")
+                if "incorrect" not in self.text_display.tag_names(char_pos):
+                    self.incorrect_chars += 1
+                    self.total_errors += 1
+                    error_info = {
+                        "expected": expected_char,
+                        "actual": typed_char,
+                        "position": self.current_index
+                    }
+                    self.error_details.append(error_info)
+                    logging.debug(f"Error logged: {error_info}")
+                
                 self.text_display.tag_add("incorrect", char_pos, f"{char_pos}+1c")
+                self.text_display.tag_remove("correct", char_pos, f"{char_pos}+1c")
             
             self.current_index += 1
             logging.debug(f"Index incremented to: {self.current_index}")
@@ -171,15 +174,16 @@ class TypingApp(ctk.CTk):
             self.test_in_progress = False
 
             # Log the session to the database
-            duration = time.time() - self.start_time
-            log_typing_session(
-                chapter_id=self.chapter_id,
-                duration=duration,
-                correct_chars=self.correct_chars,
-                incorrect_chars=self.incorrect_chars,
-                total_errors=self.total_errors,
-                error_details=self.error_details
-            )
+            if self.start_time: # Ensure test has started
+                duration = time.time() - self.start_time
+                log_typing_session(
+                    chapter_id=self.chapter_id,
+                    duration=duration,
+                    correct_chars=self.correct_chars,
+                    incorrect_chars=self.incorrect_chars,
+                    total_errors=self.total_errors,
+                    error_details=self.error_details
+                )
 
             if self.incorrect_chars == 0:
                 self.test_completed_correctly = True
@@ -224,12 +228,15 @@ class TypingApp(ctk.CTk):
         if mode == "dark":
             correct_fg = "#A5D6A7"  # Light Green
             incorrect_fg = "#EF9A9A" # Light Red
+            corrected_fg = "#FFD54F" # Light Orange/Yellow for corrected
         else: # Light mode
             correct_fg = "#388E3C"  # Dark Green
             incorrect_fg = "#D32F2F" # Dark Red
+            corrected_fg = "#FFA000" # Dark Orange/Amber for corrected
         
         self.text_display.tag_configure("correct", foreground=correct_fg)
         self.text_display.tag_configure("incorrect", foreground=incorrect_fg)
+        self.text_display.tag_configure("corrected", foreground=corrected_fg)
 
     def _get_text_widget_colors(self, mode):
         if mode == "dark":

@@ -1,7 +1,7 @@
 import sqlite3
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 DB_FILE = os.path.join('data', 'stash.db')
 
@@ -120,7 +120,7 @@ def log_typing_session(chapter_id: int, duration: float, correct_chars: int, inc
     cursor = conn.cursor()
     try:
         end_time = datetime.now()
-        start_time = (end_time - datetime.timedelta(seconds=duration))
+        start_time = (end_time - timedelta(seconds=duration))
         
         wpm = calculate_wpm(correct_chars, duration)
         accuracy = calculate_accuracy(correct_chars, total_errors)
