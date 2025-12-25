@@ -3,6 +3,8 @@ from tkinter import Text, END
 import time
 import os
 import json
+import logging
+import argparse
 from src.stats_tracker import calculate_wpm, calculate_accuracy
 
 # --- Settings ---
@@ -90,24 +92,41 @@ class TypingApp(ctk.CTk):
         self.text_display.tag_add("untyped", "1.0", END)
 
     def on_key_press(self, event):
+        logging.debug(f"\n--- Key Press: '{event.char}' ---")
         if event.keysym == "BackSpace":
             if self.current_index > 0:
+                # Determine if the test was finished and is now being edited
+                if self.current_index >= len(self.source_text):
+                    self.test_in_progress = True # Re-open the test for edits
+                    logging.debug("Test was finished, reopening for correction.")
+
                 self.current_index -= 1
-                # Remove tags from the character being erased
                 char_pos = f"1.{self.current_index}"
+                
+                # Check tags to see if the character was correct or incorrect
+                tags = self.text_display.tag_names(char_pos)
+                if "correct" in tags:
+                    self.correct_chars -= 1
+                    logging.debug("Correct character deleted.")
+                elif "incorrect" in tags:
+                    self.incorrect_chars -= 1
+                    logging.debug("Incorrect character deleted.")
+                
                 self.text_display.tag_remove("correct", char_pos, f"{char_pos}+1c")
                 self.text_display.tag_remove("incorrect", char_pos, f"{char_pos}+1c")
-            return "break" # Prevents default backspace behavior
+                logging.debug(f"Backspace pressed. New index: {self.current_index}, Correct: {self.correct_chars}, Incorrect: {self.incorrect_chars}")
+            return "break"
 
-        # Ignore non-printable keys (e.g., Shift, Ctrl)
         if len(event.char) != 1 or not event.char.isprintable():
+            logging.debug("Ignoring non-printable key.")
             return
 
-        # If test is finished, do nothing
         if self.current_index >= len(self.source_text):
+            logging.debug("Test finished. Ignoring key press.")
             return "break"
 
         if not self.test_in_progress:
+            logging.debug("First key press. Starting test.")
             self.start_time = time.time()
             self.test_in_progress = True
 
@@ -125,24 +144,33 @@ class TypingApp(ctk.CTk):
                 self.text_display.tag_add("incorrect", char_pos, f"{char_pos}+1c")
             
             self.current_index += 1
+            logging.debug(f"Index incremented to: {self.current_index}")
             self.update_stats()
 
         if self.current_index >= len(self.source_text):
+            logging.debug("--- TEST FINISHED ---")
             self.test_in_progress = False
-            # Can add end-of-test logic here
+            logging.debug(f"Final state: test_in_progress = {self.test_in_progress}")
 
-        return "break" # Prevents the key from being inserted into the widget
+        return "break"
 
     def update_stats(self):
+        logging.debug(f"Updating stats. In progress? {self.test_in_progress}")
         if self.start_time and self.test_in_progress:
             duration = time.time() - self.start_time
             
             wpm = calculate_wpm(self.correct_chars, duration)
             total_typed = self.correct_chars + self.incorrect_chars
             acc = calculate_accuracy(self.correct_chars, total_typed)
+
+            logging.debug(f"  Duration: {duration:.4f}s")
+            logging.debug(f"  Correct Chars: {self.correct_chars}")
+            logging.debug(f"  WPM: {wpm:.2f}")
             
             self.wpm_label.configure(text=f"WPM: {wpm:.2f}")
             self.accuracy_label.configure(text=f"Accuracy: {acc:.2f}%")
+        else:
+            logging.debug("  Skipping stats update (test not in progress or started).")
 
     def toggle_theme(self):
         mode = "dark" if self.theme_switch.get() == 1 else "light"
@@ -184,5 +212,16 @@ class TypingApp(ctk.CTk):
             json.dump(settings, f, indent=4)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="A typing practice application.")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging to a file.")
+    args = parser.parse_args()
+
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG, 
+                            filename='debug.log', 
+                            filemode='w', 
+                            format='%(asctime)s - %(levelname)s - %(message)s')
+        logging.debug("Debug mode enabled.")
+
     app = TypingApp()
     app.mainloop()
