@@ -20,8 +20,10 @@ def initialize_db():
             chapter_url TEXT UNIQUE NOT NULL,
             content JSON NOT NULL,
             stashed_date TEXT NOT NULL
-        );
-
+        )
+    ''')
+    
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS typing_sessions (
             session_id INTEGER PRIMARY KEY AUTOINCREMENT,
             chapter_id INTEGER,
@@ -109,6 +111,38 @@ def list_chapters() -> list[dict]:
         })
     return chapters_list
 
+def log_typing_session(chapter_id: int, duration: float, correct_chars: int, incorrect_chars: int, total_errors: int, error_details: list) -> int | None:
+    """
+    Logs a completed typing session to the database, including detailed error analysis.
+    """
+    from src.stats_tracker import calculate_wpm, calculate_accuracy
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        end_time = datetime.now()
+        start_time = (end_time - datetime.timedelta(seconds=duration))
+        
+        wpm = calculate_wpm(correct_chars, duration)
+        accuracy = calculate_accuracy(correct_chars, total_errors)
+        errors_json = json.dumps(error_details)
+        
+        cursor.execute('''
+            INSERT INTO typing_sessions (chapter_id, start_time, end_time, duration, 
+                                         correct_chars, incorrect_chars, total_chars, wpm, accuracy, errors_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (chapter_id, start_time.isoformat(), end_time.isoformat(), duration,
+              correct_chars, incorrect_chars, (correct_chars + incorrect_chars), wpm, accuracy, errors_json))
+        
+        conn.commit()
+        session_id = cursor.lastrowid
+        print(f"Successfully logged session {session_id} for chapter {chapter_id}.")
+        return session_id
+    except Exception as e:
+        print(f"Error logging typing session: {e}")
+        return None
+    finally:
+        conn.close()
+
 if __name__ == '__main__':
     initialize_db()
     print("Database initialized.")
@@ -117,12 +151,25 @@ if __name__ == '__main__':
     test_title = "The Author's POV - Chapter 1"
     test_author = "Unknown"
     test_url = "https://www.novelbin.org/novel/the-authors-pov-novel/chapter-1.html"
-    test_content = "This is the content of the first chapter. It's a test of the stash system."
+    test_content = "This is the content of the first chapter."
 
     print(f"Adding chapter: {test_title}")
     chapter_id = add_chapter(test_title, test_author, test_url, test_content)
     if chapter_id:
         print(f"Chapter added with ID: {chapter_id}")
+
+        # Simulate logging a session
+        log_typing_session(
+            chapter_id=chapter_id,
+            duration=60.5,
+            correct_chars=len(test_content),
+            incorrect_chars=2,
+            total_errors=5,
+            error_details=[
+                {'expected': 'c', 'actual': 'x', 'position': 10},
+                {'expected': 'f', 'actual': 'd', 'position': 20}
+            ]
+        )
 
         retrieved_chapter = get_chapter(chapter_id)
         if retrieved_chapter:

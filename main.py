@@ -6,6 +6,7 @@ import json
 import logging
 import argparse
 from src.stats_tracker import calculate_wpm, calculate_accuracy
+from src.stash_manager import initialize_db, log_typing_session
 
 # --- Settings ---
 SETTINGS_FILE = "config/settings.json"
@@ -20,9 +21,12 @@ class TypingApp(ctk.CTk):
 
         # --- Typing State ---
         self.source_text = ""
+        self.chapter_id = 1 # Placeholder for current chapter
         self.current_index = 0
         self.correct_chars = 0
         self.incorrect_chars = 0
+        self.total_errors = 0
+        self.error_details = []
         self.start_time = None
         self.test_in_progress = False
         self.test_completed_correctly = False
@@ -81,6 +85,8 @@ class TypingApp(ctk.CTk):
         self.current_index = 0
         self.correct_chars = 0
         self.incorrect_chars = 0
+        self.total_errors = 0
+        self.error_details = []
         self.start_time = None
         self.test_in_progress = False
         self.test_completed_correctly = False
@@ -146,6 +152,14 @@ class TypingApp(ctk.CTk):
                 self.text_display.tag_add("correct", char_pos, f"{char_pos}+1c")
             else:
                 self.incorrect_chars += 1
+                self.total_errors += 1
+                error_info = {
+                    "expected": expected_char,
+                    "actual": typed_char,
+                    "position": self.current_index
+                }
+                self.error_details.append(error_info)
+                logging.debug(f"Error logged: {error_info}")
                 self.text_display.tag_add("incorrect", char_pos, f"{char_pos}+1c")
             
             self.current_index += 1
@@ -155,9 +169,23 @@ class TypingApp(ctk.CTk):
         if self.current_index >= len(self.source_text):
             logging.debug("--- TEST FINISHED ---")
             self.test_in_progress = False
+
+            # Log the session to the database
+            duration = time.time() - self.start_time
+            log_typing_session(
+                chapter_id=self.chapter_id,
+                duration=duration,
+                correct_chars=self.correct_chars,
+                incorrect_chars=self.incorrect_chars,
+                total_errors=self.total_errors,
+                error_details=self.error_details
+            )
+
             if self.incorrect_chars == 0:
                 self.test_completed_correctly = True
                 logging.debug("Test completed with 100% accuracy. Locking input.")
+            
+            logging.debug(f"Final error details: {self.error_details}")
             logging.debug(f"Final state: test_in_progress = {self.test_in_progress}")
 
         return "break"
@@ -168,12 +196,13 @@ class TypingApp(ctk.CTk):
             duration = time.time() - self.start_time
             
             wpm = calculate_wpm(self.correct_chars, duration)
-            total_typed = self.correct_chars + self.incorrect_chars
-            acc = calculate_accuracy(self.correct_chars, total_typed)
+            acc = calculate_accuracy(self.correct_chars, self.total_errors)
 
             logging.debug(f"  Duration: {duration:.4f}s")
             logging.debug(f"  Correct Chars: {self.correct_chars}")
+            logging.debug(f"  Total Errors: {self.total_errors}")
             logging.debug(f"  WPM: {wpm:.2f}")
+            logging.debug(f"  Accuracy: {acc:.2f}%")
             
             self.wpm_label.configure(text=f"WPM: {wpm:.2f}")
             self.accuracy_label.configure(text=f"Accuracy: {acc:.2f}%")
@@ -244,6 +273,9 @@ if __name__ == "__main__":
                             filemode='w', 
                             format='%(asctime)s - %(levelname)s - %(message)s')
         logging.debug("Debug mode enabled.")
+
+    # Initialize the database
+    initialize_db()
 
     app = TypingApp()
     app.mainloop()

@@ -18,13 +18,18 @@ def calculate_wpm(correct_chars: int, duration_seconds: float) -> float:
     wpm = (words_typed / duration_seconds) * 60
     return wpm
 
-def calculate_accuracy(correct_chars: int, total_chars: int) -> float:
+def calculate_accuracy(correct_chars: int, total_errors: int) -> float:
     """
-    Calculates typing accuracy as a percentage.
+    Calculates typing accuracy based on correct characters and total errors made.
+    This metric reflects the user's precision over all characters typed,
+    including those that were corrected.
+    
+    Formula: accuracy = (correct_chars / (correct_chars + total_errors)) * 100
     """
-    if total_chars <= 0:
-        return 0.0
-    accuracy = (correct_chars / total_chars) * 100
+    total_typed = correct_chars + total_errors
+    if total_typed <= 0:
+        return 100.0 # Return 100% if no characters were typed
+    accuracy = (correct_chars / total_typed) * 100
     return accuracy
 
 def log_typing_session(chapter_id: int, errors: list, duration: float, 
