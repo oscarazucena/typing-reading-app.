@@ -6,7 +6,8 @@ import json
 import logging
 import argparse
 from src.stats_tracker import calculate_wpm, calculate_accuracy
-from src.stash_manager import initialize_db, log_typing_session
+from src.stash_manager import initialize_db, log_typing_session, add_chapter
+from src.novelbin_scraper import scrape_novel_chapter
 
 # --- Settings ---
 SETTINGS_FILE = "config/settings.json"
@@ -62,6 +63,22 @@ class TypingApp(ctk.CTk):
         self.text_display.pack(fill="both", expand=True)
         self.text_display.focus()
 
+        # --- Scraper Frame ---
+        self.scraper_frame = ctk.CTkFrame(self.main_frame)
+        self.scraper_frame.pack(pady=10, padx=10, fill="x")
+
+        self.url_label = ctk.CTkLabel(self.scraper_frame, text="Chapter URL:")
+        self.url_label.pack(side="left", padx=(0, 5))
+
+        self.url_entry = ctk.CTkEntry(self.scraper_frame, width=400)
+        self.url_entry.pack(side="left", fill="x", expand=True)
+
+        self.fetch_button = ctk.CTkButton(self.scraper_frame, text="Fetch Chapter", command=self.fetch_chapter_from_url)
+        self.fetch_button.pack(side="left", padx=(5, 5))
+
+        self.stash_button = ctk.CTkButton(self.scraper_frame, text="Stash Chapter", command=self.stash_current_chapter)
+        self.stash_button.pack(side="left", padx=(0, 0))
+
         # Define tags for highlighting - colors will be set by theme
         self.text_display.tag_configure("correct")
         self.text_display.tag_configure("incorrect", underline=True)
@@ -73,6 +90,48 @@ class TypingApp(ctk.CTk):
         
         self.load_settings()
         self.load_text("The quick brown fox jumps over the lazy dog. Try typing this sentence to test your speed and accuracy.")
+
+    def fetch_chapter_from_url(self):
+        url = self.url_entry.get()
+        if not url:
+            # Handle empty URL case, maybe show a message
+            return
+        
+        self.fetch_button.configure(text="Fetching...", state="disabled")
+        self.update() # Force UI update
+
+        try:
+            # This might take a few seconds, so the UI is disabled during this time
+            chapter_text = scrape_novel_chapter(url)
+            if chapter_text:
+                self.load_text(chapter_text)
+                # Optionally, clear the entry or give feedback
+                self.url_entry.delete(0, END)
+            else:
+                # Handle scraping failure, e.g., show an error message
+                # For now, just re-enable the button
+                pass
+        finally:
+            self.fetch_button.configure(text="Fetch Chapter", state="normal")
+
+    def stash_current_chapter(self):
+        if not self.source_text:
+            print("No text loaded to stash.") # Replace with UI feedback
+            return
+        
+        # For now, use a simple title/author. In a real app, this would be user input or scraped.
+        title = f"Scraped Chapter from {self.url_entry.get() or 'Unknown URL'}"
+        author = "NovelBin Scraper"
+        chapter_url = self.url_entry.get() # Use the URL from the entry, or a placeholder
+        if not chapter_url:
+            chapter_url = f"local://scraped/{hash(self.source_text)}"
+
+        chapter_id = add_chapter(title, author, chapter_url, self.source_text)
+        if chapter_id:
+            print(f"Chapter stashed successfully with ID: {chapter_id}") # Replace with UI feedback
+            self.chapter_id = chapter_id # Set current chapter to the stashed one
+        else:
+            print("Failed to stash chapter.") # Replace with UI feedback
 
     def load_text(self, text):
         self.source_text = text
