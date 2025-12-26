@@ -70,32 +70,49 @@ def scrape_novel_table_of_contents(toc_url: str) -> dict | None:
             if author_element:
                 book_author = author_element.text.strip()
 
-        # --- Direct Scraping of Chapter List ---
-        chapter_list_container = book_container.find('div', id="list-chapter")
-        if chapter_list_container:
-            chapter_links = chapter_list_container.find_all('a', href=True)
-            
-            for link in chapter_links:
-                href = link.get('href', '')
-                title = link.get('title', 'No Title').strip()
+        # --- API Call for Chapter List ---
+        cleaned_url = toc_url.split('#')[0]
+        novel_id_match = re.search(r'/b/([^/]+)', cleaned_url)
+        if novel_id_match:
+            novel_id = novel_id_match.group(1)
+            api_url = f"https://novelbin.com/ajax/chapter-archive?novelId={novel_id}"
+            print(f"Fetching chapters from API: {api_url}")
+            try:
+                api_response = scraper.get(api_url)
+                api_response.raise_for_status()
+                api_soup = BeautifulSoup(api_response.text, 'html.parser')
+                
+                # Find all list-chapter containers
+                chapter_list_containers = api_soup.select('ul.list-chapter')
+                for container in chapter_list_containers:
+                    list_items = container.find_all('li')
 
-                # Ensure it's a valid chapter link
-                if '/chapter-' not in href:
-                    continue
+                    for item in list_items:
+                        link = item.find('a', href=True)
+                        if not link:
+                            continue
 
-                chapter_num = 0
-                # Extract chapter number from title (e.g., "Chapter 1 – ...")
-                match = re.search(r'^Chapter (\d+)', title)
-                if match:
-                    chapter_num = int(match.group(1))
+                        href = link.get('href', '')
+                        title = link.get('title', 'No Title').strip()
 
-                chapters.append({
-                    'title': title,
-                    'url': href,
-                    'chapter_number': chapter_num
-                })
+                        if '/chapter-' not in href:
+                            continue
+                        
+                        chapter_num = 0
+                        # Extract chapter number reliably from the URL
+                        num_match = re.search(r'chapter-(\d+)', href)
+                        if num_match:
+                            chapter_num = int(num_match.group(1))
+
+                        chapters.append({
+                            'title': title,
+                            'url': href,
+                            'chapter_number': chapter_num
+                        })
+            except Exception as e:
+                print(f"Error fetching or parsing chapter API: {e}")
         else:
-            print("Could not find the 'div#list-chapter' container.")
+            print("Could not extract novelId from URL.")
     else:
         print("Book container (div.col-novel-main with itemtype=\"http://schema.org/Book\") not found.")
 
