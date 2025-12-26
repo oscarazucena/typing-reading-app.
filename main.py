@@ -264,6 +264,8 @@ class TypingApp(ctk.CTk):
         if not book_data:
             print("Could not find any chapters at the given ToC URL.")
             return
+        
+
 
         book_id = add_book(book_data['book_title'], book_data['book_author'], book_data['source_url'])
         

@@ -25,6 +25,7 @@ A local-first Python application for practicing typing using scraped novel conte
 - [x] **Task 6: Stashed Chapters UI** - Build a UI component to list and load stashed chapters from the database.
 - [ ] **Task 7: Gemini Drill Generator** - Integration to send error logs to Gemini and receive "practice sentences."
 - [ ] **Task 8: Create Cross-Platform Startup Scripts** - Add `run.sh` for Linux/macOS compatibility.
+- [ ] **Task 9: Modern UI Refactor** - Refactor the UI to a modern design with a sidebar for navigation as outlined in `DESIGN.md`.
 
 ## ⚠️ Development Notes & Issues
 - **Database Initialization:** Encountered and fixed an `sqlite3.OperationalError` caused by attempting to execute multiple `CREATE TABLE` statements in a single `cursor.execute()` call. The fix was to separate each SQL statement into its own `execute()` call.

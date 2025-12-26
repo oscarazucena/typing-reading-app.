@@ -84,6 +84,7 @@ def scrape_novel_table_of_contents(toc_url: str) -> dict | None:
                 
                 # Find all list-chapter containers
                 chapter_list_containers = api_soup.select('ul.list-chapter')
+                chapter_counter = 1
                 for container in chapter_list_containers:
                     list_items = container.find_all('li')
 
@@ -94,21 +95,13 @@ def scrape_novel_table_of_contents(toc_url: str) -> dict | None:
 
                         href = link.get('href', '')
                         title = link.get('title', 'No Title').strip()
-
-                        if '/chapter-' not in href:
-                            continue
                         
-                        chapter_num = 0
-                        # Extract chapter number reliably from the URL
-                        num_match = re.search(r'chapter-(\d+)', href)
-                        if num_match:
-                            chapter_num = int(num_match.group(1))
-
                         chapters.append({
                             'title': title,
                             'url': href,
-                            'chapter_number': chapter_num
+                            'chapter_number': chapter_counter
                         })
+                        chapter_counter += 1
             except Exception as e:
                 print(f"Error fetching or parsing chapter API: {e}")
         else:
