@@ -94,8 +94,14 @@ def scrape_novel_table_of_contents(toc_url: str) -> dict | None:
                             continue
 
                         href = link.get('href', '')
-                        title = link.get('title', 'No Title').strip()
                         
+                        # Robust title extraction: use title attribute, fallback to link text
+                        title = link.get('title', '').strip()
+                        if not title:
+                            title = link.text.strip()
+                        if not title:
+                            title = f"Chapter {chapter_counter}" # Fallback title
+
                         chapters.append({
                             'title': title,
                             'url': href,

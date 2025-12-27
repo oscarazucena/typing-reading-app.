@@ -38,6 +38,11 @@ class TypingApp(ctk.CTk):
         self.test_in_progress = False
         self.test_completed_correctly = False
         self.last_fetched_url = ""
+
+        # --- Chapter Cache ---
+        self.all_source_chapters_cache = []
+        self.stashed_chapters_by_url_cache = {}
+        self.current_book_id_cache = None
         
         # --- Main Container ---
         self.container = ctk.CTkFrame(self)
@@ -81,6 +86,14 @@ class TypingApp(ctk.CTk):
         self.populate_stashed_books() # Refresh books when showing this view
 
     def populate_stashed_books(self):
+        # Clear the chapter cache to ensure fresh data on next view
+        self.all_source_chapters_cache = []
+        self.stashed_chapters_by_url_cache = {}
+        self.current_book_id_cache = None
+
+        # Scroll to top
+        self.stash_view.stashed_items_list._parent_canvas.yview_moveto(0)
+
         # Clear any existing widgets
         for widget in self.stash_view.stashed_items_list.winfo_children():
             widget.destroy()
@@ -105,34 +118,92 @@ class TypingApp(ctk.CTk):
             no_books_label = ctk.CTkLabel(self.stash_view.stashed_items_list, text="No books stashed yet.")
             no_books_label.pack()
             
-    def show_chapters_for_book(self, book_id):
-        # Clear the list and show chapters for the selected book
+    def show_chapters_for_book(self, book_id, offset=0):
+        # --- Caching logic: Only scrape if the selected book has changed ---
+        if self.current_book_id_cache != book_id:
+            book = get_book(book_id)
+            if not book:
+                print(f"Could not find book with ID {book_id}")
+                return
+
+            all_chapters_data = scrape_novel_table_of_contents(book['source_url'])
+            if not all_chapters_data or not all_chapters_data['chapters']:
+                for widget in self.stash_view.stashed_items_list.winfo_children():
+                    widget.destroy()
+                no_chapters_label = ctk.CTkLabel(self.stash_view.stashed_items_list, text="Could not fetch chapter list from source.")
+                no_chapters_label.pack()
+                back_button = ctk.CTkButton(self.stash_view.stashed_items_list, text="< Back to Books", command=self.populate_stashed_books)
+                back_button.pack(pady=10)
+                return
+            
+            self.all_source_chapters_cache = all_chapters_data['chapters']
+            self.current_book_id_cache = book_id  # Set the cache to the current book
+            
+            stashed_chapters = list_chapters_for_book(book_id)
+            self.current_book_chapters = stashed_chapters
+            self.stashed_chapters_by_url_cache = {ch['chapter_url']: ch for ch in stashed_chapters}
+
+            self.stash_view.title_label.configure(text=f"Chapters for: {book['title']}")
+            self.stash_view.skip_frame.grid(row=1, column=0, pady=(5,10), sticky="ew")
+            self.stash_view.skip_button.configure(command=lambda: self.skip_to_chapter(book_id))
+
+        # --- UI Redraw Logic (runs on every page change) ---
+        self.stash_view.stashed_items_list._parent_canvas.yview_moveto(0)
         for widget in self.stash_view.stashed_items_list.winfo_children():
             widget.destroy()
-            
-        book = get_book(book_id)
-        self.stash_view.title_label.configure(text=f"Chapters for: {book['title']}")
 
-        # Show and configure the skip frame
-        self.stash_view.skip_frame.grid(row=1, column=0, pady=(5,10), sticky="ew")
-        self.stash_view.skip_button.configure(command=lambda: self.skip_to_chapter(book_id))
-            
-        chapters = list_chapters_for_book(book_id)
-        self.current_book_chapters = chapters # Store for navigation
+        limit = 200
+        chapters_to_display = self.all_source_chapters_cache[offset : offset + limit]
 
-        if chapters:
-            for idx, chapter in enumerate(chapters):
+        # --- Display chapters for the current page ---
+        for chapter_info in chapters_to_display:
+            chapter_url = chapter_info['url']
+            is_stashed = chapter_url in self.stashed_chapters_by_url_cache
+            
+            if is_stashed:
+                stashed_chapter = self.stashed_chapters_by_url_cache[chapter_url]
+                try:
+                    nav_index = [c['id'] for c in self.current_book_chapters].index(stashed_chapter['id'])
+                except ValueError:
+                    nav_index = -1
+                
                 chapter_button = ctk.CTkButton(
                     self.stash_view.stashed_items_list,
-                    text=chapter['title'],
-                    command=lambda ch_id=chapter['id'], index=idx: self.load_chapter_and_show_view(ch_id, index)
+                    text=f"{chapter_info['title']} (Stashed)",
+                    command=lambda ch_id=stashed_chapter['id'], index=nav_index: self.load_chapter_and_show_view(ch_id, index)
                 )
                 chapter_button.pack(fill="x", padx=5, pady=2)
-        else:
-            no_chapters_label = ctk.CTkLabel(self.stash_view.stashed_items_list, text="This book has no chapters stashed.")
-            no_chapters_label.pack()
+            else:
+                unstashed_label = ctk.CTkLabel(
+                    self.stash_view.stashed_items_list,
+                    text=f"{chapter_info['title']} (Not Stashed)",
+                    text_color="gray", anchor="w"
+                )
+                unstashed_label.pack(fill="x", padx=15, pady=2)
 
-        # Add a back button
+        # --- Navigation Panel ---
+        nav_frame = ctk.CTkFrame(self.stash_view.stashed_items_list)
+        nav_frame.pack(pady=10, fill="x")
+        nav_frame.grid_columnconfigure(1, weight=1) # Make the label expand
+
+        # Previous Button
+        if offset > 0:
+            prev_offset = max(0, offset - limit)
+            prev_button = ctk.CTkButton(nav_frame, text="< Previous", command=lambda: self.show_chapters_for_book(book_id, prev_offset))
+            prev_button.grid(row=0, column=0, padx=5)
+
+        # Page Info Label
+        total_pages = -(-len(self.all_source_chapters_cache) // limit) # Ceiling division
+        page_label = ctk.CTkLabel(nav_frame, text=f"Page {offset // limit + 1} of {total_pages}")
+        page_label.grid(row=0, column=1, sticky="ew")
+
+        # Next Button
+        if len(self.all_source_chapters_cache) > offset + limit:
+            next_offset = offset + limit
+            next_button = ctk.CTkButton(nav_frame, text="Next >", command=lambda: self.show_chapters_for_book(book_id, next_offset))
+            next_button.grid(row=0, column=2, padx=5)
+
+        # Back to Books button (always visible at the bottom)
         back_button = ctk.CTkButton(self.stash_view.stashed_items_list, text="< Back to Books", command=self.populate_stashed_books)
         back_button.pack(pady=10)
 
