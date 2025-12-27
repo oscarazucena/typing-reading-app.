@@ -1,6 +1,6 @@
 import customtkinter as ctk
 
-class StashView(ctk.CTkFrame):
+class LibraryView(ctk.CTkFrame):
     def __init__(self, master, controller):
         super().__init__(master)
         self.controller = controller
@@ -29,6 +29,8 @@ class StashView(ctk.CTkFrame):
         self.stashed_items_list = ctk.CTkScrollableFrame(self)
         self.stashed_items_list.grid(row=2, column=0, sticky="nsew", padx=20, pady=10)
 
-        # --- Back Button ---
-        back_button = ctk.CTkButton(self, text="< Back to Main Menu", command=self.controller.show_startup_view)
-        back_button.grid(row=3, column=0, pady=10)
+        # --- Navigation Frame (for pagination buttons) ---
+        self.nav_frame = ctk.CTkFrame(self)
+        self.nav_frame.grid(row=3, column=0, pady=10, padx=20, sticky="ew")
+        self.nav_frame.grid_columnconfigure(1, weight=1)  # Make the label expand
+

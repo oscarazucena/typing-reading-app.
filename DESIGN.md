@@ -32,7 +32,7 @@ The main application window will be divided into two primary components:
 The application will be composed of the following primary views, accessible from the sidebar:
 
 1.  **Practice View:** This will be the main screen. It will merge the functionality of the current `StartupView` and `TypingView`. Users can fetch new chapters from a URL or start a typing test on an already-loaded chapter.
-2.  **Library View:** This will be the `StashView`, showing the list of stashed books and chapters. Selecting a chapter here will load it into the Practice View.
+2.  **Library View:** This will be the `LibraryView`, showing the list of stashed books and chapters. Selecting a chapter here will load it into the Practice View.
 3.  **Statistics View:** (Future) A dedicated view to show historical performance data, such as WPM and accuracy charts over time.
 4.  **Settings View:** (Future) A view for managing application settings, such as the theme, API keys, and other preferences.
 
